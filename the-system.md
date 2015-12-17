@@ -2,19 +2,21 @@ Operating systems was one of the courses during undergrad that revealed many mys
 
 Working out the details of these components is valuable and important experience. You learn about software engineering. You learn about architecting for testing. You learn about important details of the system. You learn essential abstractions from the worlds of computing - processes, threads, file-system. And this resolved a ton of magic for me in how a system is oriented.
 
-I've learned more about what I would call 'the system' as I've spent more time at the project of software. One of the things I've learned is that there are a ton of conventions. Things that aren't exactly natural in the "this is the only way it could be" kind of way. Our sisters and brothers on Alpha Centauri might have developed systems that look rather different overall. But our conventions, taken together, have a harmony and a logic, such that each individual convention is someone, just right.
+As I've spent more time at the project of software, I've learned more about what I would call 'the system'. One thing I've learned is there are a ton of _conventions_. Things that aren't exactly natural in the "this is the only way it could be" kind of way; our sisters and brothers on Alpha Centauri might have developed systems that look rather different overall; but our conventions, taken together, have a harmony and a logic, such that each individual convention is someone, just right.
 
 ENVIRONMENT_VARIABLES
 
-I want to talk about environment variables. First let's talk about what they are, and how you and your programs interact with them.
+I want to talk about environment variables. First let's say what they are, and how you and your programs interact with them.
 
 Environment variables are string-valued variables associated with a process. They are inherited from the environment that created the process (the `fork` system call on POSIX, the `spawn` family of calls on Windows), and may be modified by the process itself (for example, to pass some information on to a spawned process).
 
-That's the entirety of the mechanics. But you could get this from a manpage. But that's probably only helpful if you know why they're there and what they're for. I want to give you my understanding of 
+That's the entirety of the mechanics. You could get this from a manpage, but that's probably only helpful if you know why they're there and what they're typically used for. I want to give you my understanding of how they fit into the bigger picture of coordinating different programs that need to operate within _the system_.
 
-If you have a POSIX terminal open, you can interrogate what environment variables are set therein with the command `env`. You can interrogate the value of the environment variables whose name is PATH with `echo $PATH`. By convention, we give environment variables names that are all uppercase. (hey, don't we usually write GET and POST in all caps? hmmmm ....)
+If you have a POSIX terminal open, you can interrogate what environment variables are set therein with the command `env`. You can interrogate the value of the environment variables whose name is PATH with `echo $PATH`. By convention, we give environment variables names that are all uppercase. (hey, don't we usually write GET and POST in all caps? hmmmm ....).
 
 I don't know the equivalent of `env` is for a `cmd` prompt, but `echo %PATH%` is the equivalent of `echo $PATH`
+
+Some good topics to cover that are not fleshed out yet:
 
 - accessing environment variables from a program; `getenv` and `environ`; emphasizing that these are either system calls, or data provided from the system.
 - writing hello environment in python, running the program in different environments
@@ -22,7 +24,7 @@ I don't know the equivalent of `env` is for a `cmd` prompt, but `echo %PATH%` is
 
 Basic Examples: HOME, USER
 
-Have you ever wondered how your command interpreter (e.g. bash, zsh) knows to expand `~` into your home directory? Suppose it knows your user name (learning that is a lower turtle). Suppose that was communicated to it through the USER environment variable (that probably would be a good idea). If all users in your system had their home directories at "/Users/$USER", then it could infer the value of the home directory from the user name. But the layout of apple systems is different than, say, Ubuntu. On Ubuntu, the home directory is "/home/$USER". We could be running the same command interpreter in both operating systems, and they have to know the correct location in each.
+Have you considered how your command interpreter (e.g. bash, zsh) knows to expand `~` into your home directory? Suppose it knows your user name (learning that is a lower turtle). Suppose that was communicated to it through the USER environment variable (that probably would be a good idea). If all users in your system had their home directories at "/Users/$USER", then your command interpreter could infer the value of the home directory from the user name. But the layout of apple systems is different than, say, Ubuntu. On Ubuntu, the home directory is "/home/$USER". We could be running the same command interpreter in both operating systems, and they have to know the correct location in each.
 
 One way to solve this problem would be that for bash, there's a code path that looks something like this:
 
@@ -30,7 +32,7 @@ One way to solve this problem would be that for bash, there's a code path that l
 const char* get_user_home_directory() {
 	const char* username;
 	username = getenv("USER");
-	assert(NULL != username);
+	if(NULL == username) { return NULL; }
 	const char* prefix;
 #if defined(APPLE)
 	prefix = "/Users";
@@ -50,13 +52,13 @@ const char* get_user_home_directory() {
 }
 ```
 
-This is gross for the coupling. We need to know at compile time what operating system we'll be running within. While you do need to know something about what environment you'll be executing in for compilation to even make sense, this is far, more coupling than we need.
-
-Even if we changed the conditionally compiled block to something that's deferred to run time evaluation (giving us a binary that could conceivably be ported from one operating system to another), we still have bizarre and gross coupling between our command-interpreter and the entire zoo of possible operating systems and operating system layouts. It's gross if we can't change something like where we write the users home directories because it's baked into a multitude of basic programs like bash.
+This is really gross for the coupling. While you do need to know something about what environment you'll be executing in for compilation to be well defined (e.g. what architecture will we execute upon?), this is far, more coupling than we need. Even if we changed the conditionally compiled block to something that's deferred to run time evaluation (giving us a binary that could conceivably be ported from one operating system to another), we still have bizarre and gross coupling between our command-interpreter and the entire zoo of possible operating systems and operating system layouts. It's gross if we can't change something like where we write the users home directories because it's baked into a multitude of basic programs like bash. Moreover, this logic would need to be duplicated across _every command interpreter_. This is awful, and likely would frustrate people from experimenting with this fundamental progrmas.
 
 The answer of how we do it, is the operating system promises to set the HOME environment variable to the home directory of the current user. This is one of the requirements for being a POSIX compliant operating system (TODO: check if Windows does the same).
 
-So I claim, without having looked at the source code, that bash and zsh know how to expand ~ based on the $HOME environment variable. We can test this by updating the value of HOME and seeing how the shell behaves.
+So I claim, without having looked at the source code for bash and zsh, that these command interpreters know how to expand ~ based on the $HOME environment variable. We can test this by updating the value of HOME and seeing how the shell behaves.
+
+So we have an example of how to take a basic mechanism for communicating information, and are using it to coordinate a particular program's execution within the broader system.
 
 Examples Con't: PATH
 
