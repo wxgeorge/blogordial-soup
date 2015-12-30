@@ -6,25 +6,43 @@ As I've spent more time at the project of software, I've learned more about what
 
 ENVIRONMENT_VARIABLES
 
-I want to talk about environment variables. First let's say what they are, and how you and your programs interact with them.
+One of the important facilities of the system are environment variables. Environment variables give processes a means of communicating information among themselves. Processes have a variety of means of communicating amongst themselves (the filesystem is one way, directly interrogating another process through a socket is another); environment variables offer a primitive way of communicating information, which often employed to communicate some basic information used to bootstrap other parts of a pipeline.
 
-Environment variables are string-valued variables associated with a process. They are inherited from the environment that created the process (the `fork` system call on POSIX, the `spawn` family of calls on Windows), and may be modified by the process itself (for example, to pass some information on to a spawned process).
+Lets begin with what environment variables are (their syntax) and how you and your programs interact with them (system calls and common programs for interrogating them).
+
+Environment variables are string-valued variables associated with a process. They are inherited from the environment that created the process (the `fork` system call on POSIX, the `spawn` family of calls on Windows). They may be modified by the process itself (for example, to pass some information on to a spawned process).
 
 That's the entirety of the mechanics. You could get this from a manpage, but that's probably only helpful if you know why they're there and what they're typically used for. I want to give you my understanding of how they fit into the bigger picture of coordinating different programs that need to operate within _the system_.
 
-If you have a POSIX terminal open, you can interrogate what environment variables are set therein with the command `env`. You can interrogate the value of the environment variables whose name is PATH with `echo $PATH`. By convention, we give environment variables names that are all uppercase. (hey, don't we usually write GET and POST in all caps? hmmmm ....).
+If you have a POSIX terminal open, you can interrogate what environment variables are set therein with the command `env`. You can interrogate the value of the environment variables whose name is PATH with `echo $PATH`. By convention, we give environment variables names that are all uppercase. (hey, don't we usually write GET and POST in all caps? hmmmm ....). (I don't know the equivalent of `env` is for a `cmd` prompt, but `echo %PATH%` is the equivalent of `echo $PATH`). If your terminal is bash, you can set the value of the environment variable with the name FOO to have the value "bar" with the following commmend:
 
-I don't know the equivalent of `env` is for a `cmd` prompt, but `echo %PATH%` is the equivalent of `echo $PATH`
+```
+> export FOO=bar
+```
 
-Some good topics to cover that are not fleshed out yet:
+(This may well work in other command interpreters like ZSH; I don't know why another command interpreter would bother change this syntax, but they are free to do so). The directive `export` is critical here. If we had simply written
 
-- accessing environment variables from a program; `getenv` and `environ`; emphasizing that these are either system calls, or data provided from the system.
-- writing hello environment in python, running the program in different environments
-- export PATH=$PATH:$CMAKE_HOME/bin in your .bashrc and the difference between `> ~/.bashrc` and `> source ~/.bashrc`
+```
+> FOO=bar
+```
+
+FOO wouldn't show up in the output of env, though the result of 
+
+```
+> echo $FOO
+```
+
+would still be `bar`. (bash also has a notion of variable local to the command interpreter instance. This is useful when writing scripts, where one part of the script wants to communicate with another. Environment variables exist to communicate information across processes in a particular way).
+
+Now some exercises:
+
+1) We've shown how to query and set environment variables in a bash session. Write a clone of `env` as demoed above (i.e. to print all environment variables) in the language of your choice. Hint if your language of choice is C: consult the man pages for `environ` and `getenv`.
+
+2) Suppose your `.bashrc` file contains a statement of the form `export PATH=$PATH:/Applications/CMake/Contents/bin` (or some other setting of an environment variable). If this file is executable, you'll be able to execute `> ~/.bashrc` but this won't have the effect of modifying your active session. Explain, and give the command that will modify the environment of the active session.
 
 Basic Examples: HOME, USER
 
-Have you considered how your command interpreter (e.g. bash, zsh) knows to expand `~` into your home directory? Suppose it knows your user name (learning that is a lower turtle). Suppose that was communicated to it through the USER environment variable (that probably would be a good idea). If all users in your system had their home directories at "/Users/$USER", then your command interpreter could infer the value of the home directory from the user name. But the layout of apple systems is different than, say, Ubuntu. On Ubuntu, the home directory is "/home/$USER". We could be running the same command interpreter in both operating systems, and they have to know the correct location in each.
+Lets consider how your command interpreter (e.g. bash, zsh) knows to expand `~` into your home directory? Suppose it knows your user name (learning that is a lower turtle). Suppose that was communicated to it through the USER environment variable (that probably would be a good idea). If all users in your system had their home directories at "/Users/$USER", then your command interpreter could infer the value of the home directory from the user name. But the layout of apple systems is different than, say, Ubuntu. On Ubuntu, the home directory is "/home/$USER". We could be running the same command interpreter in both operating systems, and they have to know the correct location in each.
 
 One way to solve this problem would be that for bash, there's a code path that looks something like this:
 
@@ -52,23 +70,24 @@ const char* get_user_home_directory() {
 }
 ```
 
-This is really gross for the coupling. While you do need to know something about what environment you'll be executing in for compilation to be well defined (e.g. what architecture will we execute upon?), this is far, more coupling than we need. Even if we changed the conditionally compiled block to something that's deferred to run time evaluation (giving us a binary that could conceivably be ported from one operating system to another), we still have bizarre and gross coupling between our command-interpreter and the entire zoo of possible operating systems and operating system layouts. It's gross if we can't change something like where we write the users home directories because it's baked into a multitude of basic programs like bash. Moreover, this logic would need to be duplicated across _every command interpreter_. This is awful, and likely would frustrate people from experimenting with this fundamental progrmas.
+This is gross for the coupling it introduces. While you do need to know something about what environment you'll be executing in for compilation to be well defined (e.g. what architecture will we execute upon?), this is far, more coupling than we need. Even if we changed the conditionally compiled block to something that's deferred to run time evaluation (giving us a binary that could conceivably be ported from one operating system to another), we still have bizarre and gross coupling between our command-interpreter and the entire zoo of possible operating systems and operating system layouts. It's gross if we can't change something like where we write the users home directories because it's baked into a multitude of basic programs like bash. Moreover, this logic would need to be duplicated across _every command interpreter_. This is awful, and this pain would not be worth convenience we get .
 
 The answer of how we do it, is the operating system promises to set the HOME environment variable to the home directory of the current user. This is one of the requirements for being a POSIX compliant operating system (TODO: check if Windows does the same).
 
-So I claim, without having looked at the source code for bash and zsh, that these command interpreters know how to expand ~ based on the $HOME environment variable. We can test this by updating the value of HOME and seeing how the shell behaves.
+So I claim, without having looked at the source code for bash and zsh, that these command interpreters know how to expand ~ based on the $HOME environment variable. We can test this by updating the value of HOME and seeing how the shell behaves. That's an exercise. Go do it. So we have an example of how to take a basic mechanism for communicating information, and are using it to coordinate a particular program's execution within the broader system.
 
-So we have an example of how to take a basic mechanism for communicating information, and are using it to coordinate a particular program's execution within the broader system.
+Now that you've seen this change we observe a significant point here: we were able to modify the behaviour of a compiled program, without recompiling it's source code or changing it's configuration files. This is an important point. This kind of flexibility is flexibility that all programs need in some respect or another. Sometimes this flexibility should arise through configuration files. Sometimes this flexibility is best provided with command-line switches provided at invocation time. And sometimes this flexibility is best provided with environment variables.
+
 
 Examples Con't: PATH
 
-Let's look at another, considerably more significant environment variable with shared semantics. PATH.
+Let's look at another environment variable with (arguably) more significant semantics than our previous example: PATH.
 
-So: you open a terminal and type python. We're doing this because we want to run an instance of the python interpreter. Now python comes pre-installed in Darwin and Ubuntu, so maybe it took Apple and Canonical an great deal of work of customizing bash so that when I type `python`, it runs. You don't think they did that?
+So: you open a terminal and type python. We're doing this because we want to run an instance of the python interpreter. Now python comes pre-installed in OSX and Ubuntu, so maybe it took Apple and Canonical an great deal of work of customizing bash so that when I type `python`, it runs. You don't think they did that?
 
 People who have installed python on Windows may have experienced some of this pain. They downloaded a file from the internet that started with python and ended with `.msi`. They double-clicked that file, and they got some icons on their desktop and in the start menu, but if they open a `cmd` prompt and type python, nothing happens. What gives?
 
-POSIX users will be familiar with the program `which`. (man which! go make me a sandwich!). `> which python` will result in the output "/usr/bin/python" for both Darwin and Ubuntu (/usr/bin is the expected location of all the programs installed by default in the system). `ls`ing that path reveals that file exists. And if you run `> /usr/bin/python` this has the same effect as `> python`. `/usr/bin/python` is the fully-qualified path of the python interpreter in your file-system. So how did bash find it?
+POSIX users will be familiar with the program `which`. (man which! go make me a sandwich!). `> which python` will result in the output "/usr/bin/python" for both OSX and Ubuntu (/usr/bin is the expected location of all the programs installed by default in the system). `ls`ing that path reveals that file exists. And if you run `> /usr/bin/python` this has the same effect as `> python`. `/usr/bin/python` is the fully-qualified path of the python interpreter in your file-system. So how did bash find it?
 
 The answer concerns the convention of PATH: what it specifices, and how it is formatted.
 
