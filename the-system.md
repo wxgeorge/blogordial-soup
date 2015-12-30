@@ -118,4 +118,34 @@ Similar to the problem of "where should a command interpreter look for installed
 
 Ditto for go, for ruby, for javascript and so on.
 
-Again, since the answer is system dependent, we need a convention by which to communicate information about the environment in which these programs are running. Again, we agree to set a particular environment variable. When you run a java virtual machine in an environment where the environment variable CLASSPATH is defined, this will be interpreted with the same syntax as the PATH variable (a colon separated list of paths), but these locations will be searched first for java .class files when resolving import statements.
+Again, since the answer is system dependent, we need a convention by which to communicate information about the environment in which these programs are running, to the programs that are running. Again, we agree to set a particular environment variable. When you run a java virtual machine in an environment where the environment variable CLASSPATH is defined, this will be interpreted with the same syntax as the PATH variable (a colon separated list of paths), but these locations will be searched first for java .class files when resolving import statements.
+
+Here's a simple example for java:
+
+First, navigate to a clean directory and run the following script:
+
+```bash
+for dir in one two
+do
+	mkdir $dir
+	echo "public class Demo {
+		public static void main(String[] args) {
+			System.out.println(\"Hello world! this is Demo.java from $dir\");
+		}
+	}" > $dir/Demo.java
+	javac $dir/Demo.java
+done
+```
+
+Now you can run
+```bash
+env CLASSPATH=one java Demo
+```
+
+and
+
+```bash
+env CLASSPATH=two java Demo
+```
+
+to see what effect CLASSPATH has.
